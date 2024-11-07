@@ -2,58 +2,48 @@ import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 # --- Critério: Inicializar Parâmetros ---
-# Definindo os parâmetros do algoritmo genético
-POPULATION_SIZE = 100      # Tamanho da população
-GENERATIONS = 500          # Quantidade de gerações
-MUTATION_RATE = 0.1        # Taxa de mutação
-CROSSOVER_RATE = 0.8       # Taxa de cruzamento
-ELITISM = 0.1              # Porcentagem da população que será mantida por elitismo
+POPULATION_SIZE = 100
+GENERATIONS = 1000
+MUTATION_RATE = 0.1
+CROSSOVER_RATE = 0.8
+ELITISM = 0.1
+STAGNATION_LIMIT = 50  # Limite de gerações sem melhoria
+DESIRED_DISTANCE = 150  # Exemplo de uma distância mínima aceitável (defina conforme o problema)
 
 # --- Critério: Representação dos Pontos e do Gene ---
-# Gerar pontos uniformemente distribuídos ou em um círculo
-
 def generate_points(n, scenario='uniform'):
-    """Gera pontos em um plano cartesiano."""
     if scenario == 'uniform':
         return [(random.uniform(0, 100), random.uniform(0, 100)) for _ in range(n)]
     elif scenario == 'circle':
         return [(50 + 40 * math.cos(2 * math.pi * i / n), 50 + 40 * math.sin(2 * math.pi * i / n)) for i in range(n)]
 
 # --- Critério: Inicialização da População ---
-# Cada indivíduo é uma sequência (permutação) dos pontos
 def create_individual(points):
-    """Cria um indivíduo como uma permutação dos pontos."""
     individual = points[:]
     random.shuffle(individual)
     return individual
 
 def create_population(points):
-    """Cria uma população inicial aleatória."""
     return [create_individual(points) for _ in range(POPULATION_SIZE)]
 
 # --- Critério: Função de Aptidão ---
 def calculate_distance(point1, point2):
-    """Calcula a distância euclidiana entre dois pontos."""
     return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-# --- Critério: Função de Aptidão ---
 def fitness(individual):
-    """Calcula a aptidão de um indivíduo (menor distância total) como o inverso da distância."""
     distance = 0
     for i in range(len(individual)):
         distance += calculate_distance(individual[i], individual[(i + 1) % len(individual)])
     return 1 / distance  # Inverso da distância para maximizar a aptidão
 
-
 # --- Critério: Seleção, Cruzamento e Mutação ---
 def selection(population):
-    """Seleciona um par de indivíduos para cruzamento (seleção por torneio)."""
     return random.choices(population, k=2, weights=[fitness(ind) for ind in population])
 
 def crossover(parent1, parent2):
-    """Aplica crossover de ordem (Order Crossover - OX)"""
     start, end = sorted(random.sample(range(len(parent1)), 2))
     child = [None] * len(parent1)
     child[start:end] = parent1[start:end]
@@ -62,14 +52,12 @@ def crossover(parent1, parent2):
     return child
 
 def mutate(individual):
-    """Realiza mutação trocando dois pontos de posição."""
     if random.random() < MUTATION_RATE:
         i, j = random.sample(range(len(individual)), 2)
         individual[i], individual[j] = individual[j], individual[i]
 
 # --- Critério: Avaliar e Mostrar o Desempenho ---
 def evolve(population):
-    """Executa uma geração de evolução na população."""
     new_population = sorted(population, key=fitness, reverse=True)[:int(POPULATION_SIZE * ELITISM)]
     while len(new_population) < POPULATION_SIZE:
         parent1, parent2 = selection(population)
@@ -81,35 +69,78 @@ def evolve(population):
         new_population.append(child)
     return new_population
 
-# Função para plotar a solução encontrada a cada época
-def plot_solution(points, individual, epoch):
-    """Plota a solução atual encontrada na geração especificada."""
-    plt.figure()
-    x, y = zip(*individual + [individual[0]])  # Fechar o ciclo
-    plt.plot(x, y, marker='o')
-    plt.title(f"Solução na Geração {epoch}")
+# Função para salvar e exibir soluções de várias gerações
+
+def plot_solutions(points, generations_solutions):
+    num_solutions = len(generations_solutions)
+    rows = (num_solutions - 1) // 5 + 1  # Calcular o número de linhas
+    fig, axs = plt.subplots(rows, min(num_solutions, 5), figsize=(18, 10), dpi=80)
+    fig.suptitle("Evolução das Soluções ao Longo das Gerações", fontsize=16)
+
+    # Transformar axs em uma lista de listas, mesmo se for 1D, para garantir consistência
+    if rows == 1:
+        axs = np.array([axs]).reshape(1, -1) if num_solutions > 1 else np.array([[axs]])
+
+    for i, (generation, individual) in enumerate(generations_solutions):
+        ax = axs[i // 5, i % 5]
+        x, y = zip(*individual + [individual[0]])
+        ax.plot(x, y, marker='o')
+        ax.set_title(f"Geração {generation}")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
 
+
+
 # --- Critério: Executar o Algoritmo e Mostrar Soluções ---
-def genetic_algorithm(points):
-    """Executa o algoritmo genético e exibe o desempenho a cada geração."""
+def genetic_algorithm(points, bonus=False):
     population = create_population(points)
+    generations_solutions = []
+    start_time = time.time()
+    
+    best_distance = float('inf')
+    stagnant_generations = 0
+
     for generation in range(GENERATIONS):
         population = evolve(population)
+        best_individual = max(population, key=fitness)
+        current_distance = 1 / fitness(best_individual)
         
-        # Mostrar e acompanhar as soluções
+        # Critério de parada por convergência (sem melhorias por várias gerações)
+        if current_distance < best_distance:
+            best_distance = current_distance
+            stagnant_generations = 0
+        else:
+            stagnant_generations += 1
+        
+        # Mostrar a cada 50 gerações e a última geração
         if generation % 50 == 0 or generation == GENERATIONS - 1:
-            best_individual = max(population, key=fitness)
-            print(f"Geração {generation}: Melhor distância = {-fitness(best_individual):.2f}")
-            plot_solution(points, best_individual, generation)
+            print(f"Geração {generation}: Melhor distância = {best_distance:.2f}")
+            generations_solutions.append((generation, best_individual))
+
+        # Critério de parada antecipada
+        if stagnant_generations >= STAGNATION_LIMIT:
+            print(f"Parando antecipadamente na geração {generation} por falta de melhorias.")
+            break
+        if best_distance <= DESIRED_DISTANCE:
+            print(f"Parando antecipadamente na geração {generation}: distância ótima alcançada.")
+            break
+
+    end_time = time.time()
+    if bonus:
+        print(f"Tempo total de execução (critério bônus): {end_time - start_time:.2f} segundos")
+    plot_solutions(points, generations_solutions)
 
 # --- Critério: Teste com diferentes cenários ---
-# Testar com pontos uniformes e pontos em círculo
-points_uniform = generate_points(20, 'uniform')
-points_circle = generate_points(20, 'circle')
-
+points_uniform = generate_points(8, 'uniform')
 print("Cenário: Pontos Uniformes")
 genetic_algorithm(points_uniform)
 
+points_circle = generate_points(8, 'circle')
 print("Cenário: Pontos em Círculo")
 genetic_algorithm(points_circle)
+
+# --- Critério Bônus: Teste com uma quantidade alta de pontos (modelo circular) ---
+points_large_circle = generate_points(100, 'circle')
+print("\nCenário Bônus: Pontos em Círculo com Alta Quantidade de Pontos")
+genetic_algorithm(points_large_circle, bonus=True)
