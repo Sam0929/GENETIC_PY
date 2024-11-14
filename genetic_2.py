@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import time
 
 # Definindo parâmetros do algoritmo genético
-POPULATION_SIZE = 100  # Escolhido para manter a diversidade sem aumentar muito o tempo de processamento
+POPULATION_SIZE = 200  # Escolhido para manter a diversidade sem aumentar muito o tempo de processamento
 GENERATIONS = 1000  # Número máximo de gerações permitidas
 
 # A taxa de mutação foi fixada em 10% para preservar diversidade no pool genético,
@@ -15,7 +15,7 @@ MUTATION_RATE = 0.1  # Taxa de mutação de 10% para garantir diversidade
 CROSSOVER_RATE = 0.8  # Alta taxa de cruzamento para acelerar a convergência
 ELITISM = 0.1  # 10% de elitismo para preservar as melhores soluções
 STAGNATION_LIMIT = 50  # Parada após 50 gerações sem melhoria para evitar estagnação
-DESIRED_DISTANCE = 150  # Distância alvo para uma solução aceitável, dependendo do problema
+DESIRED_DISTANCE = 0.05  # Distância alvo para uma solução aceitável, dependendo do problema
 
 # --- Critério: Representação dos Pontos e do Gene ---
 def generate_points(n, scenario='uniform'):
@@ -116,6 +116,7 @@ def genetic_algorithm(points, bonus=False):
     generations_solutions = []
     start_time = time.time()
     distances_progress = []
+    distances_progress.append(float('inf'))
     best_distance = float('inf')
     stagnant_generations = 0
 
@@ -143,9 +144,11 @@ def genetic_algorithm(points, bonus=False):
         if stagnant_generations >= STAGNATION_LIMIT:
             print(f"Parando antecipadamente na geração {generation} por falta de melhorias.")
             break
-        if best_distance <= DESIRED_DISTANCE:
-            print(f"Parando antecipadamente na geração {generation}: distância ótima alcançada.")
-            break
+
+        if generation > 0 and generation % 50 == 0:
+            if 1 - (best_distance/distances_progress[generation-50]) <= DESIRED_DISTANCE:
+                print(f"Parando antecipadamente na geração {generation}: distância ótima alcançada.")
+                break
 
     end_time = time.time()
     if bonus:
@@ -164,6 +167,6 @@ print("Cenário: Pontos em Círculo")
 genetic_algorithm(points_circle)
 
 # --- Critério Bônus: Teste com uma quantidade alta de pontos (modelo circular) ---
-points_large_circle = generate_points(100, 'circle')
+points_large_circle = generate_points(1000, 'circle')
 print("\nCenário Bônus: Pontos em Círculo com Alta Quantidade de Pontos")
 genetic_algorithm(points_large_circle, bonus=True)
